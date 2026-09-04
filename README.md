@@ -1,250 +1,85 @@
-# Azure Monitoring & Security Operations with Terraform
+# Azure Monitoring, Microsoft Sentinel & Security Operations with Terraform
 
 ## Project Overview
 
-This project demonstrates how Terraform can be used to build a centralized monitoring and security alerting environment in Microsoft Azure.
+This project demonstrates the deployment of an Azure monitoring and security operations environment using Terraform. The environment centralizes Azure activity logs in Log Analytics, uses KQL for log analysis, and integrates Microsoft Sentinel for SIEM based security monitoring and incident detection.
 
-The environment collects Azure management activity, routes selected logs into a Log Analytics Workspace, allows cloud activity to be investigated using KQL, and automatically generates alerts when specific infrastructure events occur.
+The project originally focused on Azure Monitor, Log Analytics, scheduled query alerts, and Action Groups. It was then expanded with Microsoft Sentinel to create an end to end security detection and incident investigation workflow.
 
-The project was built around a real-world scenario where a cloud or security team needs visibility into changes occurring across an Azure environment.
+A Microsoft Sentinel scheduled analytics rule was implemented to detect successful Azure resource group deletions. Controlled Azure activity was generated to test the detection, successfully producing both a security alert and security incident.
 
----
-
-## Scenario
-
-A company has infrastructure running in Microsoft Azure but lacks centralized visibility into administrative and security-related activity.
-
-The cloud and security teams need a way to:
-
-- Collect important Azure activity logs
-- Centralize logs for investigation
-- Search cloud activity using KQL
-- Detect potentially high-impact infrastructure changes
-- Automatically notify the appropriate team when specific events occur
-
-Terraform was used to deploy the monitoring and alerting infrastructure in a repeatable way.
-
----
+The resulting incident was investigated using KQL to identify the initiating account, affected resource, source IP address, operation timeline, and surrounding account activity. The incident was classified as a true positive with benign authorized activity and documented through a complete investigation workflow.
 
 ## Architecture
 
-```text
-Azure Subscription / Resources
-            |
-            v
-    Azure Activity Log
-            |
-            v
-    Diagnostic Setting
-            |
-            v
- Log Analytics Workspace
-            |
-            v
-      KQL Investigation
-            |
-            v
- Azure Monitor Alert Rule
-            |
-            v
-       Action Group
-            |
-            v
-    Email Notification
-```
+The project implements the following workflow:
 
----
+### Azure Monitoring Pipeline
 
-## Monitoring Workflow
+Azure Subscription  
+→ Azure Activity Logs  
+→ Log Analytics Workspace  
+→ KQL Query  
+→ Azure Monitor Scheduled Query Alert  
+→ Action Group  
+→ Email Notification
 
-The project follows a simple monitoring workflow:
+### Microsoft Sentinel Security Pipeline
 
-```text
-Collect → Centralize → Investigate → Detect → Alert
-```
+Azure Subscription  
+→ Azure Activity Logs  
+→ Log Analytics Workspace  
+→ Microsoft Sentinel  
+→ KQL Scheduled Analytics Rule  
+→ Security Alert  
+→ Security Incident  
+→ SOC Investigation and Triage
 
-### Collect
+## Technologies Used
 
-Azure automatically records management-plane events in the Azure Activity Log.
+- Microsoft Azure
+- Terraform
+- Microsoft Sentinel
+- Azure Monitor
+- Log Analytics
+- Kusto Query Language
+- Azure Activity Logs
+- Azure Action Groups
+- Azure CLI
+- Git
+- GitHub
 
-Examples include:
+## Infrastructure as Code
 
-- Resource creation
-- Resource deletion
-- Configuration changes
-- Administrative operations
-- Policy activity
+Terraform is used to deploy and configure the monitoring and security environment, including:
 
-### Centralize
+- Azure Resource Group
+- Log Analytics Workspace
+- Azure Activity diagnostic settings
+- Azure Monitor Action Group
+- Azure Monitor scheduled query alert
+- Microsoft Sentinel workspace onboarding
+- Microsoft Sentinel scheduled analytics rule
 
-A subscription-level Diagnostic Setting routes selected Azure Activity Log categories into a centralized Log Analytics Workspace.
+Using Infrastructure as Code makes the environment repeatable, version controlled, and easier to maintain.
 
-The following categories are collected:
+## Centralized Logging
+
+Azure Activity Logs are forwarded into the Log Analytics workspace using Azure diagnostic settings.
+
+The following activity categories are collected:
 
 - Administrative
 - Security
 - Policy
 
-### Investigate
+This provides centralized visibility into subscription level activity and allows the logs to be queried using KQL.
 
-Kusto Query Language (KQL) is used to search and investigate activity stored in Log Analytics.
+## Azure Monitor Detection
 
-### Detect
+The original monitoring portion of the project uses an Azure Monitor scheduled query rule to detect successful resource group deletions.
 
-An Azure Monitor scheduled query alert automatically searches the collected logs for successful Resource Group deletion events.
-
-### Alert
-
-When the detection condition is met, an Azure Monitor Action Group sends an email notification.
-
----
-
-## Infrastructure Deployed with Terraform
-
-Terraform was used to deploy and configure:
-
-- Azure Resource Group
-- Log Analytics Workspace
-- Subscription-level Diagnostic Setting
-- Administrative Activity Log collection
-- Security Activity Log collection
-- Policy Activity Log collection
-- Azure Monitor Action Group
-- KQL-based scheduled query alert
-- Email notification configuration
-
----
-
-## Terraform Structure
-
-```text
-terraform-azure-monitoring-security/
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── terraform.tfvars
-├── .terraform.lock.hcl
-├── .gitignore
-└── README.md
-```
-
-### main.tf
-
-Defines the Azure infrastructure, including:
-
-- Resource Group
-- Log Analytics Workspace
-- Diagnostic Setting
-- Action Group
-- Azure Monitor scheduled query alert
-
-### variables.tf
-
-Defines reusable input variables such as:
-
-- Resource Group name
-- Azure region
-- Log Analytics Workspace name
-- Alert email address
-
-### terraform.tfvars
-
-Provides local values for the Terraform variables.
-
-This file is excluded from GitHub using `.gitignore`.
-
-### outputs.tf
-
-Returns useful information after deployment, including:
-
-- Resource Group name
-- Log Analytics Workspace name
-- Log Analytics Workspace ID
-- Action Group ID
-- Alert Rule name
-
----
-
-## Log Analytics Workspace
-
-The Log Analytics Workspace acts as the centralized location for querying and analyzing the Azure activity collected by the monitoring environment.
-
-The workspace was configured with:
-
-```hcl
-sku               = "PerGB2018"
-retention_in_days = 30
-```
-
-This keeps collected logs available for investigation while maintaining a limited retention period for the lab environment.
-
----
-
-## Diagnostic Settings
-
-Terraform configures a subscription-level Diagnostic Setting.
-
-The Diagnostic Setting sends selected Azure Activity Log categories to the Log Analytics Workspace.
-
-```hcl
-enabled_log {
-  category = "Administrative"
-}
-
-enabled_log {
-  category = "Security"
-}
-
-enabled_log {
-  category = "Policy"
-}
-```
-
-The current Azure subscription is dynamically identified using:
-
-```hcl
-data "azurerm_client_config" "current" {}
-```
-
-This prevents the subscription ID from needing to be hardcoded into the Terraform configuration.
-
----
-
-## KQL Investigation
-
-After deploying the monitoring infrastructure, Azure CLI was used to generate test activity.
-
-A temporary Resource Group was created to produce an administrative event.
-
-The activity was then located in Log Analytics using KQL.
-
-Example investigation query:
-
-```kusto
-AzureActivity
-| where TimeGenerated > ago(1h)
-| sort by TimeGenerated desc
-```
-
-A more targeted query was also used:
-
-```kusto
-AzureActivity
-| where TimeGenerated > ago(1h)
-| where OperationNameValue contains "resourcegroups"
-| project TimeGenerated, OperationNameValue, ActivityStatusValue, ResourceGroup
-| sort by TimeGenerated desc
-```
-
-This allowed the exact operation names and activity statuses recorded by Azure to be investigated.
-
----
-
-## Automated Detection Rule
-
-The project includes an Azure Monitor scheduled query alert designed to detect successful Resource Group deletions.
-
-The final KQL detection query is:
+The rule searches Azure Activity logs for:
 
 ```kusto
 AzureActivity
@@ -252,266 +87,228 @@ AzureActivity
 | where ActivityStatusValue =~ "Success"
 ```
 
-The alert condition is configured to trigger when:
+When the condition is met, Azure Monitor triggers an alert and uses an Action Group to send a notification.
 
-```text
-Table rows > 0
-```
+This demonstrates traditional cloud monitoring and operational alerting.
 
-This means that if the query finds one or more successful Resource Group deletion events within the evaluation window, Azure Monitor can trigger the alert.
+## Microsoft Sentinel Integration
 
----
+Microsoft Sentinel was enabled on the existing Log Analytics workspace to extend the project from cloud monitoring into SIEM based security operations.
 
-## Alert Configuration
+Terraform was used to onboard the workspace to Microsoft Sentinel and deploy a scheduled analytics rule.
 
-The alert is configured with:
+The Sentinel rule searches for successful resource group deletion activity every five minutes and analyzes a fifteen minute query window.
 
-```text
-Severity:                2 - Warning
-Evaluation Frequency:    5 minutes
-Window Duration:         15 minutes
-Measurement:             Table rows
-Aggregation:             Count
-Operator:                Greater than
-Threshold:               0
-```
+The detection is configured with a Medium severity and automatically creates a security incident when the rule is triggered.
 
-The rule evaluates every 5 minutes while searching a 15-minute window of telemetry.
+## Sentinel Detection Rule
 
-The larger detection window helps account for possible delays between an Azure operation occurring and the corresponding event becoming available in Log Analytics.
-
----
-
-## Action Group
-
-An Azure Monitor Action Group was created to define who should be notified and how the notification should be delivered when the alert fires.
-
-For this project, the Action Group uses an email receiver.
-
-Conceptually:
-
-```text
-Alert Rule
-"What happened?"
-      |
-      v
-Successful Resource Group deletion detected
-      |
-      v
-Action Group
-"Who should be notified and how?"
-      |
-      v
-Email Notification
-```
-
----
-
-## Testing the Monitoring Pipeline
-
-The monitoring system was tested using temporary Azure Resource Groups created through Azure CLI.
-
-Example:
-
-```bash
-az group create \
-  --name security-alert-test-rg \
-  --location eastus
-```
-
-The Resource Group was then deleted outside Terraform:
-
-```bash
-az group delete \
-  --name security-alert-test-rg \
-  --yes \
-  --no-wait
-```
-
-Performing the operation outside Terraform simulated an infrastructure change occurring elsewhere in the Azure environment.
-
-The expected workflow was:
-
-```text
-Resource Group Deleted
-        |
-        v
-Azure Activity Log Records Event
-        |
-        v
-Diagnostic Setting Routes Event
-        |
-        v
-Log Analytics Receives Event
-        |
-        v
-KQL Detection Matches Event
-        |
-        v
-Azure Monitor Alert Fires
-        |
-        v
-Action Group Activates
-        |
-        v
-Email Notification Sent
-```
-
-The final test successfully generated the Azure Monitor alert and email notification.
-
----
-
-## Troubleshooting
-
-The first automated detection test did not trigger an alert.
-
-Instead of assuming the monitoring infrastructure was broken, the individual parts of the pipeline were tested.
-
-First, the Resource Group deletion was confirmed in Log Analytics.
-
-The actual operation value recorded by Azure was:
-
-```text
-MICROSOFT.RESOURCES/SUBSCRIPTIONS/RESOURCEGROUPS/DELETE
-```
-
-The original KQL detection used a case-sensitive comparison:
+The scheduled analytics rule uses the following KQL:
 
 ```kusto
-OperationNameValue == "Microsoft.Resources/subscriptions/resourcegroups/delete"
+AzureActivity
+| where OperationNameValue =~ "MICROSOFT.RESOURCES/SUBSCRIPTIONS/RESOURCEGROUPS/DELETE"
+| where ActivityStatusValue =~ "Success"
 ```
 
-Because `==` performs a case-sensitive comparison, the detection query did not match the actual telemetry.
+This activity may be security relevant because unauthorized deletion of cloud infrastructure can affect system availability and may indicate destructive activity or misuse of privileged access.
 
-The query was corrected to use the case-insensitive equality operator:
+## Detection Testing
 
-```kusto
-OperationNameValue =~ "MICROSOFT.RESOURCES/SUBSCRIPTIONS/RESOURCEGROUPS/DELETE"
-```
+To validate the detection pipeline, a temporary Azure resource group was intentionally created and deleted using Azure CLI.
 
-The activity status comparison was also configured using:
-
-```kusto
-ActivityStatusValue =~ "Success"
-```
-
-The corrected query was tested manually in Log Analytics and successfully returned the deletion event.
-
----
-
-## Handling Log Ingestion Delay
-
-During testing, another issue became apparent.
-
-The original alert configuration used:
-
-```hcl
-evaluation_frequency = "PT5M"
-window_duration      = "PT5M"
-```
-
-This meant Azure evaluated the alert every 5 minutes while only searching a 5-minute window.
-
-Because telemetry can take time to arrive in Log Analytics, a narrow window could make detection less reliable.
-
-The configuration was changed to:
-
-```hcl
-evaluation_frequency = "PT5M"
-window_duration      = "PT15M"
-```
-
-The alert now:
+Test resource:
 
 ```text
-Runs every 5 minutes
-        |
-        v
-Searches the previous 15 minutes
-        |
-        v
-Looks for successful Resource Group deletions
+SENTINEL-INCIDENT-TEST-RG
 ```
 
-After redeploying the corrected configuration with Terraform and generating a new test event, the alert triggered successfully.
+The deletion event was successfully ingested into the `AzureActivity` table.
 
----
+Microsoft Sentinel evaluated the event against the scheduled analytics rule and generated:
 
-## Validation
+- A Microsoft Sentinel Security Alert
+- A Microsoft Sentinel Security Incident
 
-Terraform configuration was validated throughout the project using:
+This validated the complete security detection pipeline.
 
-```bash
-terraform fmt
-terraform validate
-terraform plan
-terraform apply
+## Incident Investigation
+
+The generated incident was investigated using KQL and Azure Activity logs.
+
+The investigation focused on answering:
+
+- Who performed the activity?
+- What resource was affected?
+- Was the operation successful?
+- What source IP initiated the activity?
+- What activity occurred immediately before and after the event?
+- Was the activity consistent with other activity from the account?
+
+### Investigation Findings
+
+The investigation identified:
+
+**Actor:** `seanduru@gmail.com`
+
+**Affected Resource:** `SENTINEL-INCIDENT-TEST-RG`
+
+**Operation:** Resource Group Deletion
+
+**Result:** Success
+
+**Source IP:** `69.125.78.116`
+
+**Correlation ID:** `c53dae21-eb89-4f47-bd1c-c9163eb9fd2c`
+
+The correlated operation showed the following sequence:
+
+```text
+7:38:05.525 PM - Deletion started
+7:38:05.635 PM - Deletion accepted
+7:38:06.916 PM - Deletion completed successfully
 ```
 
-These commands were used to:
+Activity surrounding the incident showed that the same account and source IP created the test resource group approximately 26 seconds before deleting it.
 
-- Maintain consistent Terraform formatting
-- Validate Terraform configuration
-- Review proposed infrastructure changes
-- Deploy changes to Azure
+Additional analysis showed that the source IP associated with the deletion was also the primary source IP observed for the account during the reviewed 24 hour period.
 
----
+## KQL Investigation
+
+### Identify Resource Group Deletion Events
+
+```kusto
+AzureActivity
+| where TimeGenerated > ago(24h)
+| where OperationNameValue =~ "MICROSOFT.RESOURCES/SUBSCRIPTIONS/RESOURCEGROUPS/DELETE"
+| project TimeGenerated, Caller, ResourceGroup, OperationNameValue, ActivityStatusValue, CallerIpAddress, CorrelationId
+| order by TimeGenerated desc
+```
+
+### Reconstruct the Correlated Operation
+
+```kusto
+AzureActivity
+| where CorrelationId == "c53dae21-eb89-4f47-bd1c-c9163eb9fd2c"
+| project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceGroup, CallerIpAddress
+| order by TimeGenerated asc
+```
+
+### Investigate Surrounding Account Activity
+
+```kusto
+AzureActivity
+| where TimeGenerated between (datetime(2026-09-04 19:30:00) .. datetime(2026-09-04 19:45:00))
+| where Caller =~ "seanduru@gmail.com"
+| project TimeGenerated, OperationNameValue, ActivityStatusValue, ResourceGroup, CallerIpAddress
+| order by TimeGenerated asc
+```
+
+### Analyze Source IP Activity
+
+```kusto
+AzureActivity
+| where TimeGenerated > ago(24h)
+| where Caller =~ "seanduru@gmail.com"
+| summarize Operations=count() by CallerIpAddress
+| order by Operations desc
+```
+
+## Incident Classification
+
+The incident was classified as:
+
+**True Positive | Benign Authorized Activity**
+
+The Sentinel detection was a true positive because the resource group deletion actually occurred and matched the intended detection logic.
+
+The underlying activity was determined to be benign because the resource group was intentionally created and deleted as part of an authorized security detection test.
+
+No containment or remediation actions were required.
+
+## SOC Investigation Workflow
+
+This project demonstrates the following Tier 1 security operations workflow:
+
+Detection  
+→ Alert Validation  
+→ Incident Creation  
+→ Identity Analysis  
+→ Source IP Analysis  
+→ Event Correlation  
+→ Timeline Reconstruction  
+→ Surrounding Activity Analysis  
+→ Classification  
+→ Documentation  
+→ Resolution
+
+## Monitoring vs SIEM Detection
+
+The project demonstrates the difference between traditional cloud monitoring and SIEM based security operations.
+
+### Azure Monitor
+
+Azure Monitor detects an operational condition and triggers an Action Group notification.
+
+```text
+Activity → Log Analytics → KQL → Azure Monitor Alert → Notification
+```
+
+### Microsoft Sentinel
+
+Microsoft Sentinel treats matching activity as a security detection and creates security objects that can be investigated.
+
+```text
+Activity → Log Analytics → KQL Analytics Rule → Security Alert → Security Incident → Investigation
+```
+
+This allows the same Azure telemetry to support both cloud operations and security operations use cases.
+
+## Key Skills Demonstrated
+
+- Infrastructure as Code with Terraform
+- Microsoft Azure resource deployment
+- Microsoft Sentinel SIEM configuration
+- Log Analytics workspace management
+- Azure Activity Log collection
+- KQL log analysis
+- Scheduled security detection engineering
+- Azure Monitor alerting
+- Security alert validation
+- Incident investigation and triage
+- Event correlation
+- Timeline reconstruction
+- Source IP and identity analysis
+- Incident classification
+- SOC documentation
+- Cloud security monitoring
+- Operational troubleshooting
+- Git based infrastructure version control
+
+## Project Files
+
+```text
+main.tf
+variables.tf
+outputs.tf
+README.md
+incident-investigation.md
+```
+
+`main.tf` contains the Azure monitoring and Microsoft Sentinel infrastructure.
+
+`incident-investigation.md` contains the documented SOC investigation, findings, classification, and resolution.
 
 ## Security Considerations
 
-Several practices were used to avoid exposing unnecessary information in the repository.
+Terraform state files are excluded from source control because state can contain infrastructure details and potentially sensitive information.
 
-The `.gitignore` file excludes:
-
-```text
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-*.tfplan
-crash.log
-crash.*.log
-.DS_Store
-```
-
-This prevents local Terraform state and variable values such as the alert email address from being committed to GitHub.
-
-The `.terraform.lock.hcl` file can remain committed so provider dependency versions are tracked.
-
----
-
-## Skills Demonstrated
-
-- Microsoft Azure
-- Terraform
-- Infrastructure as Code
-- Azure Monitor
-- Log Analytics
-- Kusto Query Language (KQL)
-- Azure Activity Logs
-- Diagnostic Settings
-- Scheduled Query Alerts
-- Action Groups
-- Azure CLI
-- Cloud Monitoring
-- Security Monitoring
-- Log Investigation
-- Automated Alerting
-- Infrastructure Troubleshooting
-- Terraform State Management
-
----
+Sensitive values should not be hardcoded into Terraform configuration or committed to GitHub.
 
 ## Key Takeaway
 
-This project demonstrated how cloud activity can move from raw Azure telemetry into a usable monitoring and detection workflow:
+This project demonstrates an end to end cloud monitoring and security operations workflow rather than only infrastructure deployment.
 
-```text
-Collect → Centralize → Investigate → Detect → Alert
-```
+Terraform was used to deploy the monitoring and security resources, Azure Activity Logs and Log Analytics provided centralized telemetry, Azure Monitor provided operational alerting, and Microsoft Sentinel extended the environment with SIEM based detection and incident generation.
 
-More importantly, the project demonstrated that successfully deploying monitoring infrastructure does not automatically mean the detection logic works.
-
-The monitoring pipeline had to be tested using real Azure activity, the resulting telemetry had to be investigated with KQL, the detection query had to be corrected based on the actual log data, and the alert evaluation window had to be adjusted to account for ingestion delay.
-
-The final result was a Terraform managed Azure monitoring environment that successfully detected a Resource Group deletion and generated an automated email notification.
+The generated incident was then investigated using KQL to establish identity, source, timeline, context, and final disposition, demonstrating both cloud engineering and security operations skills.
